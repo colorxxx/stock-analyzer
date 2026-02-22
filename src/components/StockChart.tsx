@@ -344,7 +344,7 @@ export default function StockChart({
         </div>
       )}
       <div className="relative">
-        <div ref={containerRef} className={`touch-pan-y ${selectMode ? "cursor-crosshair" : ""}`} />
+        <div ref={containerRef} className={`${selectMode ? "cursor-crosshair" : ""}`} style={{ touchAction: "manipulation" }} />
         {/* Zoom buttons */}
         <div className="absolute bottom-3 right-3 flex flex-col gap-1 z-10">
           <button

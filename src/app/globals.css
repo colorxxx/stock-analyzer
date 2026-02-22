@@ -36,9 +36,9 @@ body {
   border-radius: 8px;
 }
 
-/* Prevent chart from stealing vertical touch scroll */
+/* Allow pinch zoom and pan on chart */
 .tv-lightweight-charts canvas {
-  touch-action: pan-y !important;
+  touch-action: manipulation !important;
 }
 
 /* Prevent layout shift / jank on mobile */

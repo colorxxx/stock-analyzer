@@ -243,6 +243,13 @@ MACD: ${data.indicators.macd.macd.slice(-1)[0]?.value?.toFixed(3) ?? "N/A"} / Si
             onSelectionChange={handleSelectionChange}
           />
 
+          {/* Chat Panel - mobile only (below chart) */}
+          <div className="lg:hidden">
+            <div className="h-[350px]">
+              <ChatPanel ticker={ticker} stockContext={stockContext} />
+            </div>
+          </div>
+
           {/* Analysis Panel */}
           <AnalysisPanel
             ticker={ticker}
@@ -257,9 +264,9 @@ MACD: ${data.indicators.macd.macd.slice(-1)[0]?.value?.toFixed(3) ?? "N/A"} / Si
           <StockInfo quote={data.quote} indicators={data.indicators} />
         </div>
 
-        {/* Right: Chat Panel */}
-        <div className="w-full lg:w-[380px] flex-shrink-0 lg:border-l border-t lg:border-t-0 border-dark-800 p-3 sm:p-4">
-          <div className="lg:sticky lg:top-4 lg:h-[calc(100vh-88px)] h-[400px]">
+        {/* Right: Chat Panel - desktop only */}
+        <div className="hidden lg:block w-[380px] flex-shrink-0 lg:border-l border-dark-800 p-3 sm:p-4">
+          <div className="lg:sticky lg:top-4 lg:h-[calc(100vh-88px)]">
             <ChatPanel ticker={ticker} stockContext={stockContext} />
           </div>
         </div>
