@@ -35,3 +35,19 @@ body {
 .tv-lightweight-charts {
   border-radius: 8px;
 }
+
+/* Prevent chart from stealing vertical touch scroll */
+.tv-lightweight-charts canvas {
+  touch-action: pan-y !important;
+}
+
+/* Prevent layout shift / jank on mobile */
+html, body {
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent content overflow causing horizontal scroll */
+#__next, main {
+  overflow-x: hidden;
+}

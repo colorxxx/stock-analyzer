@@ -177,7 +177,7 @@ MACD: ${data.indicators.macd.macd.slice(-1)[0]?.value?.toFixed(3) ?? "N/A"} / Si
   const isPositive = data.quote.regularMarketChange >= 0;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen">
       {/* Header */}
       <header className="border-b border-dark-800 px-4 py-3">
         <div className="max-w-[1800px] mx-auto flex items-center justify-between">
@@ -192,7 +192,7 @@ MACD: ${data.indicators.macd.macd.slice(-1)[0]?.value?.toFixed(3) ?? "N/A"} / Si
       </header>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col lg:flex-row max-w-[1800px] mx-auto w-full">
+      <div className="flex flex-col lg:flex-row max-w-[1800px] mx-auto w-full">
         {/* Left: Chart + Info */}
         <div className="flex-1 min-w-0 p-3 sm:p-4 space-y-4">
           {/* Stock header */}
