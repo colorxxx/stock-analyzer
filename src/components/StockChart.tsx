@@ -21,7 +21,6 @@ interface ChartProps {
   sma200?: LineData<Time>[];
   onRangeChange?: (from: string, to: string) => void;
   onSelectionChange?: (from: string | null, to: string | null) => void;
-  height?: number;
 }
 
 export default function StockChart({
@@ -40,42 +39,38 @@ export default function StockChart({
   const [selectMode, setSelectMode] = useState(false);
   const [selStart, setSelStart] = useState<string | null>(null);
   const [selEnd, setSelEnd] = useState<string | null>(null);
-  const clickCountRef = useRef(0);
+  const selectModeRef = useRef(false);
+  const clickStepRef = useRef(0); // 0 = waiting for start, 1 = waiting for end
+  const selStartRef = useRef<string | null>(null);
+  const lastCrosshairTimeRef = useRef<string | null>(null);
 
-  // Responsive height
+  // Keep refs in sync
+  useEffect(() => { selectModeRef.current = selectMode; }, [selectMode]);
+  useEffect(() => { selStartRef.current = selStart; }, [selStart]);
+
   const getChartHeight = useCallback(() => {
     if (typeof window === "undefined") return 400;
     return window.innerWidth < 640 ? 300 : window.innerWidth < 1024 ? 380 : 500;
   }, []);
 
-  // Update highlight overlay
   const updateHighlight = useCallback(
     (chart: IChartApi, start: string | null, end: string | null) => {
       if (highlightSeriesRef.current) {
-        try {
-          chart.removeSeries(highlightSeriesRef.current);
-        } catch {
-          // ignore
-        }
+        try { chart.removeSeries(highlightSeriesRef.current); } catch { /* */ }
         highlightSeriesRef.current = null;
       }
       if (!start || !end || !data.length) return;
 
       const [s, e] = start <= end ? [start, end] : [end, start];
-
       const highlightData: HistogramData<Time>[] = data
-        .filter((d) => {
-          const t = d.time as string;
-          return t >= s && t <= e;
-        })
+        .filter((d) => (d.time as string) >= s && (d.time as string) <= e)
         .map((d) => ({
           time: d.time,
           value: d.high * 1.001,
-          color: "rgba(59,130,246,0.12)",
+          color: "rgba(59,130,246,0.15)",
         }));
 
       if (highlightData.length === 0) return;
-
       const series = chart.addHistogramSeries({
         priceScaleId: "right",
         priceFormat: { type: "price" },
@@ -98,7 +93,6 @@ export default function StockChart({
     }
 
     const chartHeight = getChartHeight();
-
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
       height: chartHeight,
@@ -124,15 +118,8 @@ export default function StockChart({
         borderColor: "#2a2a3e",
         timeVisible: false,
       },
-      handleScroll: {
-        vertTouchDrag: false,
-      },
-      handleScale: {
-        axisPressedMouseMove: {
-          time: true,
-          price: true,
-        },
-      },
+      handleScroll: { vertTouchDrag: false },
+      handleScale: { axisPressedMouseMove: { time: true, price: true } },
     });
 
     const candleSeries = chart.addCandlestickSeries({
@@ -150,40 +137,61 @@ export default function StockChart({
       priceFormat: { type: "volume" },
       priceScaleId: "",
     });
-    volumeSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.8, bottom: 0 },
-    });
+    volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
     volumeSeries.setData(volumeData);
 
     if (showMA.sma20 && sma20?.length) {
-      const ma20Series = chart.addLineSeries({
-        color: "#f59e0b",
-        lineWidth: 1,
-        title: "SMA 20",
-      });
-      ma20Series.setData(sma20);
+      chart.addLineSeries({ color: "#f59e0b", lineWidth: 1, title: "SMA 20" }).setData(sma20);
     }
     if (showMA.sma50 && sma50?.length) {
-      const ma50Series = chart.addLineSeries({
-        color: "#8b5cf6",
-        lineWidth: 1,
-        title: "SMA 50",
-      });
-      ma50Series.setData(sma50);
+      chart.addLineSeries({ color: "#8b5cf6", lineWidth: 1, title: "SMA 50" }).setData(sma50);
     }
     if (showMA.sma200 && sma200?.length) {
-      const ma200Series = chart.addLineSeries({
-        color: "#ec4899",
-        lineWidth: 1,
-        title: "SMA 200",
-      });
-      ma200Series.setData(sma200);
+      chart.addLineSeries({ color: "#ec4899", lineWidth: 1, title: "SMA 200" }).setData(sma200);
     }
 
     chart.timeScale().fitContent();
     chartRef.current = chart;
 
-    // Restore highlight if selection exists
+    // Track crosshair position for click handling
+    chart.subscribeCrosshairMove((param) => {
+      if (param.time) {
+        lastCrosshairTimeRef.current = param.time as string;
+      }
+    });
+
+    // Handle clicks via subscribeClick - works on both desktop and mobile
+    chart.subscribeClick((param) => {
+      if (!selectModeRef.current) return;
+      
+      // Use param.time if available, otherwise fall back to last crosshair position
+      const timeStr = (param.time as string) || lastCrosshairTimeRef.current;
+      if (!timeStr) return;
+
+      if (clickStepRef.current === 0) {
+        // First click - set start
+        setSelStart(timeStr);
+        setSelEnd(null);
+        selStartRef.current = timeStr;
+        clickStepRef.current = 1;
+        onSelectionChange?.(timeStr, null);
+        // Clear old highlight
+        updateHighlight(chart, null, null);
+      } else {
+        // Second click - set end
+        const start = selStartRef.current!;
+        const [s, e] = start <= timeStr ? [start, timeStr] : [timeStr, start];
+        setSelStart(s);
+        setSelEnd(e);
+        clickStepRef.current = 0;
+        setSelectMode(false);
+        selectModeRef.current = false;
+        onSelectionChange?.(s, e);
+        updateHighlight(chart, s, e);
+      }
+    });
+
+    // Restore existing highlight
     if (selStart && selEnd) {
       updateHighlight(chart, selStart, selEnd);
     }
@@ -195,44 +203,11 @@ export default function StockChart({
         onRangeChange(timeRange.from as string, timeRange.to as string);
       }
     });
-  }, [data, volumeData, sma20, sma50, sma200, showMA, getChartHeight, onRangeChange, selStart, selEnd, updateHighlight]);
-
-  // Handle chart click for selection
-  useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart || !selectMode) return;
-
-    const handler = (param: { time?: Time }) => {
-      if (!param.time) return;
-      const timeStr = param.time as string;
-      const clicks = clickCountRef.current;
-
-      if (clicks === 0) {
-        setSelStart(timeStr);
-        setSelEnd(null);
-        clickCountRef.current = 1;
-        onSelectionChange?.(timeStr, null);
-      } else {
-        const start = selStart!;
-        const [s, e] = start <= timeStr ? [start, timeStr] : [timeStr, start];
-        setSelStart(s);
-        setSelEnd(e);
-        clickCountRef.current = 0;
-        setSelectMode(false);
-        onSelectionChange?.(s, e);
-        updateHighlight(chart, s, e);
-      }
-    };
-
-    chart.subscribeClick(handler);
-    return () => {
-      chart.unsubscribeClick(handler);
-    };
-  }, [selectMode, selStart, onSelectionChange, updateHighlight]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, volumeData, sma20, sma50, sma200, showMA, getChartHeight]);
 
   useEffect(() => {
     initChart();
-
     const handleResize = () => {
       if (chartRef.current && containerRef.current) {
         chartRef.current.applyOptions({
@@ -241,7 +216,6 @@ export default function StockChart({
         });
       }
     };
-
     window.addEventListener("resize", handleResize);
     return () => {
       window.removeEventListener("resize", handleResize);
@@ -256,37 +230,42 @@ export default function StockChart({
   const handleToggleSelect = () => {
     if (selectMode) {
       setSelectMode(false);
+      clickStepRef.current = 0;
     } else {
       setSelectMode(true);
       setSelStart(null);
       setSelEnd(null);
-      clickCountRef.current = 0;
+      clickStepRef.current = 0;
       onSelectionChange?.(null, null);
-      if (chartRef.current) {
-        updateHighlight(chartRef.current, null, null);
-      }
+      if (chartRef.current) updateHighlight(chartRef.current, null, null);
     }
   };
 
+  const statusText = selectMode
+    ? clickStepRef.current === 0 || !selStart
+      ? "📍 차트에서 시작일을 클릭하세요"
+      : "📍 차트에서 종료일을 클릭하세요"
+    : selStart && selEnd
+    ? `선택: ${selStart} ~ ${selEnd}`
+    : "구간 선택";
+
   return (
     <div className="bg-dark-900 rounded-xl border border-dark-700 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-dark-700">
+      <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-dark-700">
         <button
           onClick={handleToggleSelect}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             selectMode
-              ? "bg-blue-600 text-white"
+              ? "bg-blue-600 text-white animate-pulse"
+              : selStart && selEnd
+              ? "bg-blue-600/20 text-blue-400 border border-blue-500/30"
               : "bg-dark-700 text-dark-300 hover:bg-dark-600 hover:text-dark-200"
           }`}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8M8 12h8m-4-9v18" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
-          {selectMode
-            ? selStart && !selEnd
-              ? "종료일을 클릭하세요"
-              : "시작일을 클릭하세요"
-            : "구간 선택"}
+          {statusText}
         </button>
         <div className="flex items-center gap-3">
           {(["sma20", "sma50", "sma200"] as const).map((key) => (
@@ -308,11 +287,18 @@ export default function StockChart({
                     : "border-dark-500"
                 }`}
               />
-              <span className="text-xs text-dark-400">{key.toUpperCase()}</span>
+              <span className="text-xs text-dark-400 hidden sm:inline">{key.toUpperCase()}</span>
             </label>
           ))}
         </div>
       </div>
+      {selectMode && (
+        <div className="bg-blue-600/10 border-b border-blue-500/20 px-4 py-2 text-center">
+          <span className="text-xs text-blue-400 font-medium">
+            {!selStart ? "👆 차트의 캔들을 탭/클릭하여 시작일 선택" : "👆 종료일을 탭/클릭하세요"}
+          </span>
+        </div>
+      )}
       <div ref={containerRef} className={`touch-pan-y ${selectMode ? "cursor-crosshair" : ""}`} />
     </div>
   );
