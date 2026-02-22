@@ -30,22 +30,89 @@ export interface HistoricalBar {
   volume: number;
 }
 
-// Use raw Yahoo Finance API via fetch to avoid yahoo-finance2 compatibility issues
-const BASE = "https://query1.finance.yahoo.com";
+// Yahoo Finance requires crumb+cookie auth
+let cachedCrumb: string | null = null;
+let cachedCookie: string | null = null;
+let crumbExpiry = 0;
 
-async function yahooFetch(url: string) {
-  const res = await fetch(url, {
+async function getCrumb(): Promise<{ crumb: string; cookie: string }> {
+  if (cachedCrumb && cachedCookie && Date.now() < crumbExpiry) {
+    return { crumb: cachedCrumb, cookie: cachedCookie };
+  }
+
+  // Step 1: Get cookie from Yahoo Finance page
+  const initRes = await fetch("https://fc.yahoo.com", {
+    redirect: "manual",
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
   });
-  if (!res.ok) throw new Error(`Yahoo API error: ${res.status}`);
+
+  const setCookies = initRes.headers.getSetCookie?.() || [];
+  const cookieStr = setCookies.map((c: string) => c.split(";")[0]).join("; ");
+
+  if (!cookieStr) {
+    throw new Error("Failed to get Yahoo cookie");
+  }
+
+  // Step 2: Get crumb using the cookie
+  const crumbRes = await fetch("https://query2.finance.yahoo.com/v1/test/getcrumb", {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Cookie: cookieStr,
+    },
+  });
+
+  if (!crumbRes.ok) {
+    throw new Error(`Failed to get crumb: ${crumbRes.status}`);
+  }
+
+  const crumb = await crumbRes.text();
+
+  cachedCrumb = crumb;
+  cachedCookie = cookieStr;
+  crumbExpiry = Date.now() + 5 * 60 * 1000; // 5 min cache
+
+  return { crumb, cookie: cookieStr };
+}
+
+async function yahooFetch(url: string) {
+  const { crumb, cookie } = await getCrumb();
+  const separator = url.includes("?") ? "&" : "?";
+  const fullUrl = `${url}${separator}crumb=${encodeURIComponent(crumb)}`;
+
+  const res = await fetch(fullUrl, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Cookie: cookie,
+    },
+  });
+
+  if (!res.ok) {
+    // If 401/403, invalidate cache and retry once
+    if (res.status === 401 || res.status === 403) {
+      cachedCrumb = null;
+      cachedCookie = null;
+      crumbExpiry = 0;
+      const retry = await getCrumb();
+      const retryUrl = `${url}${separator}crumb=${encodeURIComponent(retry.crumb)}`;
+      const retryRes = await fetch(retryUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          Cookie: retry.cookie,
+        },
+      });
+      if (!retryRes.ok) throw new Error(`Yahoo API error: ${retryRes.status}`);
+      return retryRes.json();
+    }
+    throw new Error(`Yahoo API error: ${res.status}`);
+  }
   return res.json();
 }
 
 export async function getStockQuote(ticker: string): Promise<StockQuote> {
   const data = await yahooFetch(
-    `${BASE}/v7/finance/quote?symbols=${encodeURIComponent(ticker)}`
+    `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(ticker)}`
   );
   const q = data?.quoteResponse?.result?.[0];
   if (!q) throw new Error(`No quote data for ${ticker}`);
@@ -79,17 +146,17 @@ export async function getHistoricalData(
 ): Promise<HistoricalBar[]> {
   const p1 = Math.floor(new Date(period1).getTime() / 1000);
   const p2 = Math.floor((period2 ? new Date(period2).getTime() : Date.now()) / 1000);
-  
+
   const data = await yahooFetch(
-    `${BASE}/v8/finance/chart/${encodeURIComponent(ticker)}?period1=${p1}&period2=${p2}&interval=${interval}`
+    `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?period1=${p1}&period2=${p2}&interval=${interval}`
   );
-  
+
   const result = data?.chart?.result?.[0];
   if (!result) throw new Error(`No historical data for ${ticker}`);
-  
+
   const timestamps = result.timestamp || [];
   const ohlcv = result.indicators?.quote?.[0] || {};
-  
+
   return timestamps
     .map((ts: number, i: number) => {
       const o = ohlcv.open?.[i];
@@ -113,7 +180,7 @@ export async function getHistoricalData(
 
 export async function searchTickers(query: string) {
   const data = await yahooFetch(
-    `${BASE}/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0`
+    `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0`
   );
   return (data?.quotes || [])
     .filter((q: any) => q.quoteType === "EQUITY" && q.isYahooFinance)
