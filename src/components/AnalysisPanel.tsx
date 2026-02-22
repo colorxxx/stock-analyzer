@@ -4,8 +4,8 @@ import { useState } from "react";
 
 interface AnalysisPanelProps {
   ticker: string;
-  visibleFrom: string;
-  visibleTo: string;
+  selectedFrom: string | null;
+  selectedTo: string | null;
   priceData: { time: string; close: number; high: number; low: number; volume: number }[];
   indicators: unknown;
   quote: unknown;
@@ -13,23 +13,19 @@ interface AnalysisPanelProps {
 
 export default function AnalysisPanel({
   ticker,
-  visibleFrom,
-  visibleTo,
+  selectedFrom,
+  selectedTo,
   priceData,
   indicators,
   quote,
 }: AnalysisPanelProps) {
   const [analysis, setAnalysis] = useState("");
   const [loading, setLoading] = useState(false);
-  const [from, setFrom] = useState(visibleFrom);
-  const [to, setTo] = useState(visibleTo);
 
-  // Update date inputs when visible range changes
-  if (visibleFrom !== from && !loading) {
-    // Only update if significantly different to avoid constant updates
-  }
+  const hasSelection = selectedFrom && selectedTo;
 
   async function runAnalysis() {
+    if (!hasSelection) return;
     setLoading(true);
     setAnalysis("");
 
@@ -39,8 +35,8 @@ export default function AnalysisPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ticker,
-          from,
-          to,
+          from: selectedFrom,
+          to: selectedTo,
           priceData,
           indicators,
           quote,
@@ -49,7 +45,7 @@ export default function AnalysisPanel({
 
       if (!res.ok) {
         const error = await res.json();
-        setAnalysis(error.error || "Analysis failed. Please try again.");
+        setAnalysis(error.error || "분석에 실패했습니다. 다시 시도해주세요.");
         setLoading(false);
         return;
       }
@@ -66,7 +62,7 @@ export default function AnalysisPanel({
         }
       }
     } catch {
-      setAnalysis("Connection error. Please try again.");
+      setAnalysis("연결 오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setLoading(false);
     }
@@ -74,42 +70,33 @@ export default function AnalysisPanel({
 
   return (
     <div className="bg-dark-900 rounded-xl border border-dark-700 p-4">
-      <h3 className="text-sm font-semibold text-dark-300 mb-3">AI Timeline Analysis</h3>
-      <div className="flex flex-wrap items-end gap-3 mb-4">
-        <div>
-          <label className="block text-xs text-dark-400 mb-1">From</label>
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className="bg-dark-800 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 focus:outline-none focus:border-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-dark-400 mb-1">To</label>
-          <input
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="bg-dark-800 border border-dark-600 rounded-lg px-3 py-2 text-sm text-dark-100 focus:outline-none focus:border-blue-500"
-          />
-        </div>
+      <h3 className="text-sm font-semibold text-dark-300 mb-3">AI 구간 분석</h3>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        {hasSelection ? (
+          <span className="text-sm text-dark-200">
+            📅 {selectedFrom} ~ {selectedTo}
+          </span>
+        ) : (
+          <span className="text-sm text-dark-400">
+            차트에서 &quot;구간 선택&quot; 버튼을 눌러 분석할 구간을 선택하세요
+          </span>
+        )}
         <button
           onClick={runAnalysis}
-          disabled={loading}
-          className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+          disabled={loading || !hasSelection}
+          className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 ml-auto"
         >
           {loading ? (
             <>
               <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Analyzing...
+              분석 중...
             </>
           ) : (
             <>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              Analyze Period
+              구간 분석
             </>
           )}
         </button>

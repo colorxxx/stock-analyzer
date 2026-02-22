@@ -63,6 +63,7 @@ export default function StockPage() {
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState("1y");
   const [visibleRange, setVisibleRange] = useState({ from: "", to: "" });
+  const [selectedRange, setSelectedRange] = useState<{ from: string | null; to: string | null }>({ from: null, to: null });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -96,6 +97,10 @@ export default function StockPage() {
 
   const handleRangeChange = useCallback((from: string, to: string) => {
     setVisibleRange({ from, to });
+  }, []);
+
+  const handleSelectionChange = useCallback((from: string | null, to: string | null) => {
+    setSelectedRange({ from, to });
   }, []);
 
   // Prepare chart data
@@ -235,13 +240,14 @@ MACD: ${data.indicators.macd.macd.slice(-1)[0]?.value?.toFixed(3) ?? "N/A"} / Si
             sma50={sma50}
             sma200={sma200}
             onRangeChange={handleRangeChange}
+            onSelectionChange={handleSelectionChange}
           />
 
           {/* Analysis Panel */}
           <AnalysisPanel
             ticker={ticker}
-            visibleFrom={visibleRange.from}
-            visibleTo={visibleRange.to}
+            selectedFrom={selectedRange.from}
+            selectedTo={selectedRange.to}
             priceData={data.historical}
             indicators={data.indicators}
             quote={data.quote}

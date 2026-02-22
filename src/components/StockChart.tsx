@@ -6,6 +6,7 @@ import {
   ColorType,
   CrosshairMode,
   type IChartApi,
+  type ISeriesApi,
   type CandlestickData,
   type HistogramData,
   type LineData,
@@ -19,6 +20,7 @@ interface ChartProps {
   sma50?: LineData<Time>[];
   sma200?: LineData<Time>[];
   onRangeChange?: (from: string, to: string) => void;
+  onSelectionChange?: (from: string | null, to: string | null) => void;
   height?: number;
 }
 
@@ -29,10 +31,16 @@ export default function StockChart({
   sma50,
   sma200,
   onRangeChange,
+  onSelectionChange,
 }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const highlightSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const [showMA, setShowMA] = useState({ sma20: true, sma50: true, sma200: false });
+  const [selectMode, setSelectMode] = useState(false);
+  const [selStart, setSelStart] = useState<string | null>(null);
+  const [selEnd, setSelEnd] = useState<string | null>(null);
+  const clickCountRef = useRef(0);
 
   // Responsive height
   const getChartHeight = useCallback(() => {
@@ -40,12 +48,53 @@ export default function StockChart({
     return window.innerWidth < 640 ? 300 : window.innerWidth < 1024 ? 380 : 500;
   }, []);
 
+  // Update highlight overlay
+  const updateHighlight = useCallback(
+    (chart: IChartApi, start: string | null, end: string | null) => {
+      if (highlightSeriesRef.current) {
+        try {
+          chart.removeSeries(highlightSeriesRef.current);
+        } catch {
+          // ignore
+        }
+        highlightSeriesRef.current = null;
+      }
+      if (!start || !end || !data.length) return;
+
+      const [s, e] = start <= end ? [start, end] : [end, start];
+
+      const highlightData: HistogramData<Time>[] = data
+        .filter((d) => {
+          const t = d.time as string;
+          return t >= s && t <= e;
+        })
+        .map((d) => ({
+          time: d.time,
+          value: d.high * 1.001,
+          color: "rgba(59,130,246,0.12)",
+        }));
+
+      if (highlightData.length === 0) return;
+
+      const series = chart.addHistogramSeries({
+        priceScaleId: "right",
+        priceFormat: { type: "price" },
+        lastValueVisible: false,
+        priceLineVisible: false,
+      });
+      series.setData(highlightData);
+      highlightSeriesRef.current = series;
+    },
+    [data]
+  );
+
   const initChart = useCallback(() => {
     if (!containerRef.current) return;
 
     if (chartRef.current) {
       chartRef.current.remove();
       chartRef.current = null;
+      highlightSeriesRef.current = null;
     }
 
     const chartHeight = getChartHeight();
@@ -134,6 +183,11 @@ export default function StockChart({
     chart.timeScale().fitContent();
     chartRef.current = chart;
 
+    // Restore highlight if selection exists
+    if (selStart && selEnd) {
+      updateHighlight(chart, selStart, selEnd);
+    }
+
     chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
       if (!onRangeChange) return;
       const timeRange = chart.timeScale().getVisibleRange();
@@ -141,7 +195,40 @@ export default function StockChart({
         onRangeChange(timeRange.from as string, timeRange.to as string);
       }
     });
-  }, [data, volumeData, sma20, sma50, sma200, showMA, getChartHeight, onRangeChange]);
+  }, [data, volumeData, sma20, sma50, sma200, showMA, getChartHeight, onRangeChange, selStart, selEnd, updateHighlight]);
+
+  // Handle chart click for selection
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !selectMode) return;
+
+    const handler = (param: { time?: Time }) => {
+      if (!param.time) return;
+      const timeStr = param.time as string;
+      const clicks = clickCountRef.current;
+
+      if (clicks === 0) {
+        setSelStart(timeStr);
+        setSelEnd(null);
+        clickCountRef.current = 1;
+        onSelectionChange?.(timeStr, null);
+      } else {
+        const start = selStart!;
+        const [s, e] = start <= timeStr ? [start, timeStr] : [timeStr, start];
+        setSelStart(s);
+        setSelEnd(e);
+        clickCountRef.current = 0;
+        setSelectMode(false);
+        onSelectionChange?.(s, e);
+        updateHighlight(chart, s, e);
+      }
+    };
+
+    chart.subscribeClick(handler);
+    return () => {
+      chart.unsubscribeClick(handler);
+    };
+  }, [selectMode, selStart, onSelectionChange, updateHighlight]);
 
   useEffect(() => {
     initChart();
@@ -161,13 +248,46 @@ export default function StockChart({
       if (chartRef.current) {
         chartRef.current.remove();
         chartRef.current = null;
+        highlightSeriesRef.current = null;
       }
     };
   }, [initChart, getChartHeight]);
 
+  const handleToggleSelect = () => {
+    if (selectMode) {
+      setSelectMode(false);
+    } else {
+      setSelectMode(true);
+      setSelStart(null);
+      setSelEnd(null);
+      clickCountRef.current = 0;
+      onSelectionChange?.(null, null);
+      if (chartRef.current) {
+        updateHighlight(chartRef.current, null, null);
+      }
+    }
+  };
+
   return (
     <div className="bg-dark-900 rounded-xl border border-dark-700 overflow-hidden">
-      <div className="flex items-center justify-end px-4 py-2 border-b border-dark-700">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-dark-700">
+        <button
+          onClick={handleToggleSelect}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            selectMode
+              ? "bg-blue-600 text-white"
+              : "bg-dark-700 text-dark-300 hover:bg-dark-600 hover:text-dark-200"
+          }`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8M8 12h8m-4-9v18" />
+          </svg>
+          {selectMode
+            ? selStart && !selEnd
+              ? "종료일을 클릭하세요"
+              : "시작일을 클릭하세요"
+            : "구간 선택"}
+        </button>
         <div className="flex items-center gap-3">
           {(["sma20", "sma50", "sma200"] as const).map((key) => (
             <label key={key} className="flex items-center gap-1.5 cursor-pointer">
@@ -193,7 +313,7 @@ export default function StockChart({
           ))}
         </div>
       </div>
-      <div ref={containerRef} className="touch-pan-y" />
+      <div ref={containerRef} className={`touch-pan-y ${selectMode ? "cursor-crosshair" : ""}`} />
     </div>
   );
 }

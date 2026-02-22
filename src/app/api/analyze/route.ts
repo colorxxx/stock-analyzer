@@ -34,27 +34,27 @@ export async function POST(request: NextRequest) {
     const latestMACD = indicators?.macd?.macd?.slice(-1)[0]?.value ?? "N/A";
     const latestSignal = indicators?.macd?.signal?.slice(-1)[0]?.value ?? "N/A";
 
-    const prompt = `Analyze the stock ${ticker} for the period ${from} to ${to}.
+    const prompt = `${ticker} 종목의 ${from} ~ ${to} 기간을 분석해주세요.
 
-Key Data Points:
-- Start Price: $${startPrice}
-- End Price: $${endPrice}
-- Price Change: ${priceChange}%
-- Period High: $${highestPrice}
-- Period Low: $${lowestPrice}
-- Average Daily Volume: ${avgVolume?.toLocaleString?.() ?? avgVolume}
-- Current RSI (14): ${latestRSI}
+주요 데이터:
+- 시작가: $${startPrice}
+- 종가: $${endPrice}
+- 가격 변동률: ${priceChange}%
+- 기간 최고가: $${highestPrice}
+- 기간 최저가: $${lowestPrice}
+- 평균 일일 거래량: ${avgVolume?.toLocaleString?.() ?? avgVolume}
+- RSI (14): ${latestRSI}
 - MACD: ${latestMACD}, Signal: ${latestSignal}
-${quote ? `- Market Cap: $${(quote.marketCap / 1e9).toFixed(2)}B` : ""}
-${quote?.trailingPE ? `- P/E Ratio: ${quote.trailingPE.toFixed(2)}` : ""}
+${quote ? `- 시가총액: $${(quote.marketCap / 1e9).toFixed(2)}B` : ""}
+${quote?.trailingPE ? `- PER: ${quote.trailingPE.toFixed(2)}` : ""}
 
-Provide a concise analysis covering:
-1. **Price Action Summary**: Key price movements and trends in this period
-2. **Technical Analysis**: What RSI, MACD, and moving averages suggest
-3. **Volume Analysis**: What volume patterns indicate
-4. **Outlook**: Short-term outlook based on current technicals
+다음 항목을 포함하여 간결하게 분석해주세요:
+1. **가격 흐름 요약**: 해당 기간의 주요 가격 움직임과 추세
+2. **기술적 분석**: RSI, MACD, 이동평균선이 시사하는 점
+3. **거래량 분석**: 거래량 패턴이 의미하는 것
+4. **전망**: 현재 기술적 지표 기반 단기 전망
 
-Keep it actionable and data-driven. Use specific numbers.`;
+구체적인 수치를 사용하여 실용적으로 분석해주세요.`;
 
     const response = await fetch(`${LLM_API_BASE_URL}/chat/completions`, {
       method: "POST",
@@ -67,7 +67,7 @@ Keep it actionable and data-driven. Use specific numbers.`;
         messages: [
           {
             role: "system",
-            content: "You are an expert stock analyst. Provide clear, data-driven analysis. Be concise but thorough. This is for informational purposes only, not financial advice.",
+            content: "You are an expert stock analyst. Provide clear, data-driven analysis. Be concise but thorough. This is for informational purposes only, not financial advice. Respond in Korean (한국어).",
           },
           { role: "user", content: prompt },
         ],
