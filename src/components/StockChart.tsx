@@ -119,7 +119,7 @@ export default function StockChart({
         timeVisible: false,
       },
       handleScroll: {
-        vertTouchDrag: false,
+        vertTouchDrag: true,
         mouseWheel: true,
         pressedMouseMove: true,
         horzTouchDrag: true,
@@ -344,7 +344,7 @@ export default function StockChart({
         </div>
       )}
       <div className="relative">
-        <div ref={containerRef} className={`${selectMode ? "cursor-crosshair" : ""}`} style={{ touchAction: "manipulation" }} />
+        <div ref={containerRef} className={selectMode ? "cursor-crosshair" : ""} />
         {/* Zoom buttons */}
         <div className="absolute bottom-3 right-3 flex flex-col gap-1 z-10">
           <button

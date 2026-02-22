@@ -36,11 +36,6 @@ body {
   border-radius: 8px;
 }
 
-/* Allow pinch zoom and pan on chart */
-.tv-lightweight-charts canvas {
-  touch-action: manipulation !important;
-}
-
 /* Prevent layout shift / jank on mobile */
 html, body {
   overflow-x: hidden;
