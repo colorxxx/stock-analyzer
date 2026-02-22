@@ -192,9 +192,9 @@ MACD: ${data.indicators.macd.macd.slice(-1)[0]?.value?.toFixed(3) ?? "N/A"} / Si
       </header>
 
       {/* Main content */}
-      <div className="flex-1 flex max-w-[1800px] mx-auto w-full">
+      <div className="flex-1 flex flex-col lg:flex-row max-w-[1800px] mx-auto w-full">
         {/* Left: Chart + Info */}
-        <div className="flex-1 min-w-0 p-4 space-y-4 overflow-y-auto">
+        <div className="flex-1 min-w-0 p-3 sm:p-4 space-y-4">
           {/* Stock header */}
           <div className="flex items-baseline gap-3">
             <h1 className="text-2xl font-bold text-dark-100">{data.quote.symbol}</h1>
@@ -252,8 +252,8 @@ MACD: ${data.indicators.macd.macd.slice(-1)[0]?.value?.toFixed(3) ?? "N/A"} / Si
         </div>
 
         {/* Right: Chat Panel */}
-        <div className="w-[380px] flex-shrink-0 border-l border-dark-800 p-4 hidden lg:block">
-          <div className="sticky top-4 h-[calc(100vh-88px)]">
+        <div className="w-full lg:w-[380px] flex-shrink-0 lg:border-l border-t lg:border-t-0 border-dark-800 p-3 sm:p-4">
+          <div className="lg:sticky lg:top-4 lg:h-[calc(100vh-88px)] h-[400px]">
             <ChatPanel ticker={ticker} stockContext={stockContext} />
           </div>
         </div>

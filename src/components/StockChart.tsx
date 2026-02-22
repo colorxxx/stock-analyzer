@@ -29,11 +29,16 @@ export default function StockChart({
   sma50,
   sma200,
   onRangeChange,
-  height = 500,
 }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const [showMA, setShowMA] = useState({ sma20: true, sma50: true, sma200: false });
+
+  // Responsive height
+  const getChartHeight = useCallback(() => {
+    if (typeof window === "undefined") return 400;
+    return window.innerWidth < 640 ? 300 : window.innerWidth < 1024 ? 380 : 500;
+  }, []);
 
   const initChart = useCallback(() => {
     if (!containerRef.current) return;
@@ -43,9 +48,11 @@ export default function StockChart({
       chartRef.current = null;
     }
 
+    const chartHeight = getChartHeight();
+
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
-      height,
+      height: chartHeight,
       layout: {
         background: { type: ColorType.Solid, color: "#1a1a2e" },
         textColor: "#8e8ea0",
@@ -67,6 +74,15 @@ export default function StockChart({
       timeScale: {
         borderColor: "#2a2a3e",
         timeVisible: false,
+      },
+      handleScroll: {
+        vertTouchDrag: false,
+      },
+      handleScale: {
+        axisPressedMouseMove: {
+          time: true,
+          price: true,
+        },
       },
     });
 
@@ -125,7 +141,7 @@ export default function StockChart({
         onRangeChange(timeRange.from as string, timeRange.to as string);
       }
     });
-  }, [data, volumeData, sma20, sma50, sma200, showMA, height, onRangeChange]);
+  }, [data, volumeData, sma20, sma50, sma200, showMA, getChartHeight, onRangeChange]);
 
   useEffect(() => {
     initChart();
@@ -134,6 +150,7 @@ export default function StockChart({
       if (chartRef.current && containerRef.current) {
         chartRef.current.applyOptions({
           width: containerRef.current.clientWidth,
+          height: getChartHeight(),
         });
       }
     };
@@ -146,7 +163,7 @@ export default function StockChart({
         chartRef.current = null;
       }
     };
-  }, [initChart]);
+  }, [initChart, getChartHeight]);
 
   return (
     <div className="bg-dark-900 rounded-xl border border-dark-700 overflow-hidden">
@@ -176,7 +193,7 @@ export default function StockChart({
           ))}
         </div>
       </div>
-      <div ref={containerRef} />
+      <div ref={containerRef} className="touch-pan-y" />
     </div>
   );
 }
