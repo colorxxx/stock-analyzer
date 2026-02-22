@@ -118,8 +118,18 @@ export default function StockChart({
         borderColor: "#2a2a3e",
         timeVisible: false,
       },
-      handleScroll: { vertTouchDrag: false },
-      handleScale: { axisPressedMouseMove: { time: true, price: true } },
+      handleScroll: {
+        vertTouchDrag: false,
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+      },
+      handleScale: {
+        mouseWheel: true,
+        pinch: true,
+        axisPressedMouseMove: { time: true, price: true },
+        axisDoubleClickReset: { time: true, price: true },
+      },
     });
 
     const candleSeries = chart.addCandlestickSeries({
@@ -188,6 +198,11 @@ export default function StockChart({
         selectModeRef.current = false;
         onSelectionChange?.(s, e);
         updateHighlight(chart, s, e);
+        // Re-enable scroll/zoom
+        chart.applyOptions({
+          handleScroll: { pressedMouseMove: true, horzTouchDrag: true, mouseWheel: true },
+          handleScale: { mouseWheel: true, pinch: true },
+        });
       }
     });
 
@@ -231,14 +246,43 @@ export default function StockChart({
     if (selectMode) {
       setSelectMode(false);
       clickStepRef.current = 0;
+      // Re-enable scroll/zoom
+      if (chartRef.current) {
+        chartRef.current.applyOptions({
+          handleScroll: { pressedMouseMove: true, horzTouchDrag: true, mouseWheel: true },
+          handleScale: { mouseWheel: true, pinch: true },
+        });
+      }
     } else {
       setSelectMode(true);
       setSelStart(null);
       setSelEnd(null);
       clickStepRef.current = 0;
       onSelectionChange?.(null, null);
-      if (chartRef.current) updateHighlight(chartRef.current, null, null);
+      if (chartRef.current) {
+        updateHighlight(chartRef.current, null, null);
+        // Disable scroll/zoom so taps register as clicks
+        chartRef.current.applyOptions({
+          handleScroll: { pressedMouseMove: false, horzTouchDrag: false, mouseWheel: false },
+          handleScale: { mouseWheel: false, pinch: false },
+        });
+      }
     }
+  };
+
+  const handleZoom = (direction: "in" | "out") => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const range = chart.timeScale().getVisibleLogicalRange();
+    if (!range) return;
+    const span = range.to - range.from;
+    const center = (range.from + range.to) / 2;
+    const factor = direction === "in" ? 0.7 : 1.4;
+    const newSpan = Math.max(10, span * factor);
+    chart.timeScale().setVisibleLogicalRange({
+      from: center - newSpan / 2,
+      to: center + newSpan / 2,
+    });
   };
 
   const statusText = selectMode
@@ -299,7 +343,24 @@ export default function StockChart({
           </span>
         </div>
       )}
-      <div ref={containerRef} className={`touch-pan-y ${selectMode ? "cursor-crosshair" : ""}`} />
+      <div className="relative">
+        <div ref={containerRef} className={`touch-pan-y ${selectMode ? "cursor-crosshair" : ""}`} />
+        {/* Zoom buttons */}
+        <div className="absolute bottom-3 right-3 flex flex-col gap-1 z-10">
+          <button
+            onClick={() => handleZoom("in")}
+            className="w-8 h-8 rounded-md bg-dark-800/80 backdrop-blur text-dark-300 hover:bg-dark-700 hover:text-dark-100 flex items-center justify-center text-lg font-bold transition-colors"
+          >
+            +
+          </button>
+          <button
+            onClick={() => handleZoom("out")}
+            className="w-8 h-8 rounded-md bg-dark-800/80 backdrop-blur text-dark-300 hover:bg-dark-700 hover:text-dark-100 flex items-center justify-center text-lg font-bold transition-colors"
+          >
+            −
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
